@@ -1,0 +1,234 @@
+#!/usr/bin/env bats
+# Tests for hooks/guard.sh: the PreToolUse hook that blocks agent access to
+# secret files (S2) and git guardrail bypasses (S3).
+
+GUARD="$BATS_TEST_DIRNAME/../hooks/guard.sh"
+
+# Build a PreToolUse payload: tool name + tool_input JSON object.
+payload() {
+  jq -cn --arg tool "$1" --argjson input "$2" \
+    '{hook_event_name: "PreToolUse", cwd: "/repo", tool_name: $tool, tool_input: $input}'
+}
+
+run_guard() {
+  run bash -c 'printf "%s" "$1" | "$2"' _ "$(payload "$1" "$2")" "$GUARD"
+}
+
+assert_blocked() {
+  [ "$status" -eq 2 ] || { echo "expected exit 2, got $status: $output"; return 1; }
+  [[ "$output" == *"claude-code-guardrails"* ]] || { echo "missing reason: $output"; return 1; }
+}
+
+assert_allowed() {
+  [ "$status" -eq 0 ] || { echo "expected exit 0, got $status: $output"; return 1; }
+  [ -z "$output" ] || { echo "expected no output, got: $output"; return 1; }
+}
+
+# --- S2: file tools on secret files -----------------------------------------
+
+@test "S2: Read .env is blocked" {
+  run_guard Read '{"file_path": "/repo/.env"}'
+  assert_blocked
+}
+
+@test "S2: Read .env.production is blocked" {
+  run_guard Read '{"file_path": "/repo/config/.env.production"}'
+  assert_blocked
+}
+
+@test "S2: Edit private key .pem is blocked" {
+  run_guard Edit '{"file_path": "/repo/certs/server.pem", "old_string": "a", "new_string": "b"}'
+  assert_blocked
+}
+
+@test "S2: Write .key file is blocked" {
+  run_guard Write '{"file_path": "/repo/tls/server.key", "content": "x"}'
+  assert_blocked
+}
+
+@test "S2: MultiEdit .npmrc is blocked" {
+  run_guard MultiEdit '{"file_path": "/home/u/.npmrc", "edits": []}'
+  assert_blocked
+}
+
+@test "S2: NotebookEdit on secret path is blocked" {
+  run_guard NotebookEdit '{"notebook_path": "/repo/.env", "new_source": "x"}'
+  assert_blocked
+}
+
+@test "S2: Read SSH private key is blocked" {
+  run_guard Read '{"file_path": "/home/u/.ssh/id_ed25519"}'
+  assert_blocked
+}
+
+@test "S2: Read anything under ~/.ssh is blocked" {
+  run_guard Read '{"file_path": "/home/u/.ssh/config"}'
+  assert_blocked
+}
+
+@test "S2: Read AWS credentials is blocked" {
+  run_guard Read '{"file_path": "/home/u/.aws/credentials"}'
+  assert_blocked
+}
+
+@test "S2: Read gcloud config is blocked" {
+  run_guard Read '{"file_path": "/home/u/.config/gcloud/application_default_credentials.json"}'
+  assert_blocked
+}
+
+@test "S2: Read service account JSON is blocked" {
+  run_guard Read '{"file_path": "/repo/deploy/my-service-account-key.json"}'
+  assert_blocked
+}
+
+@test "S2: Read credentials.json is blocked" {
+  run_guard Read '{"file_path": "/repo/credentials.json"}'
+  assert_blocked
+}
+
+@test "S2: Read .pypirc, .p12 and .pfx are blocked" {
+  run_guard Read '{"file_path": "/home/u/.pypirc"}'
+  assert_blocked
+  run_guard Read '{"file_path": "/repo/cert.p12"}'
+  assert_blocked
+  run_guard Read '{"file_path": "/repo/cert.pfx"}'
+  assert_blocked
+}
+
+@test "S2: Grep inside .env is blocked" {
+  run_guard Grep '{"pattern": "API_KEY", "path": "/repo/.env"}'
+  assert_blocked
+}
+
+@test "S2: Glob for .env files is blocked" {
+  run_guard Glob '{"pattern": "**/.env*"}'
+  assert_blocked
+}
+
+@test "S2: Read .env.example is allowed" {
+  run_guard Read '{"file_path": "/repo/.env.example"}'
+  assert_allowed
+}
+
+@test "S2: Read .env.sample and .env.template are allowed" {
+  run_guard Read '{"file_path": "/repo/.env.sample"}'
+  assert_allowed
+  run_guard Read '{"file_path": "/repo/.env.template"}'
+  assert_allowed
+}
+
+@test "S2: Read public SSH key is allowed" {
+  run_guard Read '{"file_path": "/repo/keys/id_ed25519.pub"}'
+  assert_allowed
+}
+
+@test "S2: Read ordinary source file is allowed" {
+  run_guard Read '{"file_path": "/repo/src/environment.py"}'
+  assert_allowed
+}
+
+# --- S2: Bash commands referencing secret files -----------------------------
+
+@test "S2: Bash cat .env is blocked" {
+  run_guard Bash '{"command": "cat .env"}'
+  assert_blocked
+}
+
+@test "S2: Bash source ./config/.env.local is blocked" {
+  run_guard Bash '{"command": "source ./config/.env.local && npm start"}'
+  assert_blocked
+}
+
+@test "S2: Bash reading SSH key via redirect is blocked" {
+  run_guard Bash '{"command": "base64 <~/.ssh/id_rsa"}'
+  assert_blocked
+}
+
+@test "S2: Bash cp .env.example .env is blocked (writes a secret file)" {
+  run_guard Bash '{"command": "cp .env.example .env"}'
+  assert_blocked
+}
+
+@test "S2: Bash cat .env.example is allowed" {
+  run_guard Bash '{"command": "cat .env.example"}'
+  assert_allowed
+}
+
+@test "S2: Bash ordinary command is allowed" {
+  run_guard Bash '{"command": "pytest tests/ -q && git status"}'
+  assert_allowed
+}
+
+# --- S3: git guardrail bypasses ---------------------------------------------
+
+@test "S3: git commit --no-verify is blocked" {
+  run_guard Bash '{"command": "git commit --no-verify -m \"wip\""}'
+  assert_blocked
+}
+
+@test "S3: git commit -n is blocked" {
+  run_guard Bash '{"command": "git commit -n -m wip"}'
+  assert_blocked
+}
+
+@test "S3: git commit with combined short flags including n is blocked" {
+  run_guard Bash '{"command": "git commit -anm wip"}'
+  assert_blocked
+}
+
+@test "S3: git push --no-verify is blocked" {
+  run_guard Bash '{"command": "git push --no-verify origin feat"}'
+  assert_blocked
+}
+
+@test "S3: git push --force is blocked" {
+  run_guard Bash '{"command": "git push --force origin main"}'
+  assert_blocked
+}
+
+@test "S3: git push -f is blocked" {
+  run_guard Bash '{"command": "git add . && git push -f"}'
+  assert_blocked
+}
+
+@test "S3: git push origin +main (force refspec) is blocked" {
+  run_guard Bash '{"command": "git push origin +main"}'
+  assert_blocked
+}
+
+@test "S3: git push --force-with-lease is allowed" {
+  run_guard Bash '{"command": "git push --force-with-lease origin feat"}'
+  assert_allowed
+}
+
+@test "S3: plain git commit and push are allowed" {
+  run_guard Bash '{"command": "git commit -m \"feat: add x\" && git push origin feat"}'
+  assert_allowed
+}
+
+@test "S3: commit message containing -n or --no-verify text is allowed" {
+  run_guard Bash '{"command": "git commit -m \"docs: explain why --no-verify and -n are blocked\""}'
+  assert_allowed
+}
+
+@test "S3: git -c core.hooksPath=/dev/null commit is blocked" {
+  run_guard Bash '{"command": "git -c core.hooksPath=/dev/null commit -m wip"}'
+  assert_blocked
+}
+
+@test "S3: git -C other/repo commit --no-verify is blocked" {
+  run_guard Bash '{"command": "git -C other/repo commit --no-verify -m wip"}'
+  assert_blocked
+}
+
+# --- Robustness --------------------------------------------------------------
+
+@test "unknown tools are allowed" {
+  run_guard WebFetch '{"url": "https://example.com/.env"}'
+  assert_allowed
+}
+
+@test "malformed JSON fails closed" {
+  run bash -c 'printf "not json" | "$1"' _ "$GUARD"
+  assert_blocked
+}

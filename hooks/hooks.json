@@ -1,0 +1,17 @@
+{
+  "description": "claude-code-guardrails: block agent access to secret files and git guardrail bypasses",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/guard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
