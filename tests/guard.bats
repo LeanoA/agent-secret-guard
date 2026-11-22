@@ -117,9 +117,24 @@ assert_allowed() {
   assert_allowed
 }
 
-@test "S2: Read public SSH key is allowed" {
+@test "S2: Read public SSH key is allowed (including inside ~/.ssh)" {
   run_guard Read '{"file_path": "/repo/keys/id_ed25519.pub"}'
   assert_allowed
+  run_guard Read '{"file_path": "/home/u/.ssh/id_ed25519.pub"}'
+  assert_allowed
+}
+
+@test "S2: Grep and Glob on secret directories without trailing slash are blocked" {
+  run_guard Grep '{"pattern": "PRIVATE", "path": "/home/u/.ssh"}'
+  assert_blocked
+  run_guard Grep '{"pattern": "token", "path": "/home/u/.config/gcloud"}'
+  assert_blocked
+  run_guard Grep '{"pattern": "key", "path": "/home/u/.aws"}'
+  assert_blocked
+  run_guard Glob '{"pattern": "*", "path": "/home/u/.ssh"}'
+  assert_blocked
+  run_guard Bash '{"command": "grep -r PRIVATE ~/.ssh"}'
+  assert_blocked
 }
 
 @test "S2: Read ordinary source file is allowed" {
@@ -219,6 +234,40 @@ assert_allowed() {
 @test "S3: git -C other/repo commit --no-verify is blocked" {
   run_guard Bash '{"command": "git -C other/repo commit --no-verify -m wip"}'
   assert_blocked
+}
+
+@test "S3: attached -c and mixed-case core.HooksPath are blocked" {
+  run_guard Bash '{"command": "git -ccore.hooksPath=/dev/null commit -m wip"}'
+  assert_blocked
+  run_guard Bash '{"command": "git -c core.HooksPath=/dev/null commit -m wip"}'
+  assert_blocked
+}
+
+@test "S3: --git-dir, --work-tree, and full-path /usr/bin/git cannot bypass guardrails" {
+  run_guard Bash '{"command": "git --git-dir .git commit --no-verify -m wip"}'
+  assert_blocked
+  run_guard Bash '{"command": "git --work-tree . commit --no-verify -m wip"}'
+  assert_blocked
+  run_guard Bash '{"command": "/usr/bin/git commit --no-verify -m wip"}'
+  assert_blocked
+}
+
+@test "S3: quoted flags and refspecs are still blocked" {
+  run_guard Bash '{"command": "git -c \"core.hooksPath=/dev/null\" commit -m wip"}'
+  assert_blocked
+  run_guard Bash '{"command": "git push origin \"+main\""}'
+  assert_blocked
+  run_guard Bash '{"command": "git commit \"--no-verify\" -m wip"}'
+  assert_blocked
+  run_guard Bash '{"command": "git push \"--force\" origin main"}'
+  assert_blocked
+}
+
+@test "S3: escaped quotes inside commit message do not false-positive" {
+  run_guard Bash '{"command": "git commit -m \"docs: mention \\\"-n\\\"\""}'
+  assert_allowed
+  run_guard Bash '{"command": "git commit -am \"docs: mention --no-verify\""}'
+  assert_allowed
 }
 
 # --- Robustness --------------------------------------------------------------
