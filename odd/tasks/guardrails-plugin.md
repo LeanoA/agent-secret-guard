@@ -20,12 +20,12 @@ Source: user accepted the proposal of 2026-11-22 (see L1-L2). Scope below comes 
 
 | ID | Specs | Route | Status | Evidence |
 |---|---|---|---|---|
-| T1 | S1 | inline | in progress | — |
-| T2 | S2, S3 | inline (no writer trigger: single unit) | pending | — |
-| T3 | S4 | inline | pending | — |
-| T4 | S5 | inline | pending | — |
-| T5 | S6 | inline | pending | — |
-| T6 | S7 | inline | pending | — |
+| T1 | S1 | inline | done | `a9a192a`, `claude plugin validate .` PASS |
+| T2 | S2, S3 | inline (no writer trigger: single unit) | done | `26df8c8` + `7122644`, 44/44 `bats tests/guard.bats` PASS, independent verifier PASS (Risk: item 2 security guard) |
+| T3 | S4 | inline | done | `aec5914`, 5/5 `bats tests/install.bats` PASS, `claude plugin validate .` PASS |
+| T4 | S5 | inline | done | `2fc757a`, 4/4 `bats tests/github_guardrails.bats` PASS |
+| T5 | S6 | inline | done | `e7c7d63`, structural readback |
+| T6 | S7 | inline | done | `ad6ae2f`, structural readback |
 | T7 | S8 | needs user OK | blocked (publishing) | — |
 
 Risk: T2 touches item 2 (security guard); verify with an independent verifier at feature end, not per task.
@@ -36,3 +36,4 @@ Forecast: ~600 authored changed lines; above 400 → ask-on-risk chain question 
 - **L1 (2026-11-22, verbatim):** "arranquemos como repo nuevo a la seccion de portafolio y terminamos la reecritura del cv con lo que ya tengo. Pero la fecha docente es 2019–2026 y si son 320+ alumnos"
 - **L2 (2026-11-22, verbatim, context):** "Esto guardrails de secretos/pre-commit en tus repos no tengo, deberia hacerlo?" — answered yes; proposed layers: pre-commit + gitleaks, GitHub secret scanning/push protection/branch protection, agent hooks blocking `.env`/credential reads and dangerous commands, leak runbook, packaged as a reusable public plugin.
 - **L3:** Environment: Claude Code 2.1.207 (`claude plugin validate` available), bats, jq present; gitleaks and pre-commit not installed (use `uvx pre-commit`, which bootstraps gitleaks).
+- **L4 (2026-11-22):** Independent read-only verifier (`c5a044e7`) audited `a9a192a..ad6ae2f`, passed S1/S4/S5/S6/S7 and flagged 4 concrete blockers in `hooks/guard.sh` (secret dirs without trailing slash, attached/mixed-case `-c core.hooksPath`, `--git-dir`/`--work-tree`/`/usr/bin/git`, blind quote stripping) plus `~/.ssh/*.pub` order. Fixed all in `7122644` with 5 regression tests (53/53 `bats` PASS); scoped recheck returned PASS on all items. T7 (publish/rollout) remains blocked awaiting explicit user authorization.
