@@ -1,0 +1,20 @@
+# Dogfooding: this repo uses the same commit guardrails it ships.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: detect-private-key
+        # Test fixtures mention key headers on purpose.
+        exclude: ^tests/
+  - repo: local
+    hooks:
+      - id: bats
+        name: bats tests
+        entry: bats tests
+        language: system
+        pass_filenames: false
+        files: ^(hooks|skills|tests)/
