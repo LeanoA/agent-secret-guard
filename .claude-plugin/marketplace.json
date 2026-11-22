@@ -1,0 +1,15 @@
+{
+  "name": "claude-code-guardrails",
+  "description": "Single-plugin marketplace for claude-code-guardrails.",
+  "owner": {
+    "name": "Alexander Nelson Leano",
+    "url": "https://github.com/LeanoA"
+  },
+  "plugins": [
+    {
+      "name": "claude-code-guardrails",
+      "source": "./",
+      "description": "Secrets handling and commit guardrails for teams using Claude Code."
+    }
+  ]
+}
