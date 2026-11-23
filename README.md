@@ -43,6 +43,26 @@ npx agent-secret-guardrails@latest --agent antigravity --only-skills
 npx agent-secret-guardrails@latest --no-pre-commit
 ```
 
+#### CLI Options Reference
+
+| Flag | Default | Description |
+|---|---|---|
+| `[target-dir]` / `--target <dir>` | `.` (`cwd`) | Target project directory. |
+| `-p`, `--project` | `(default)` | Install into target project (`.claude/`, `.agents/`, `.pre-commit-config.yaml`). |
+| `-g`, `--global` | `false` | Install Layer 1 globally into `~/.claude/` and `~/.gemini/config/plugins/agent-secret-guard/`. Skips `pre-commit` unless `--only-pre-commit` is passed. |
+| `-a`, `--agent <name>` | `all` | Target agent: `claude-code` (`claude`), `antigravity` (`agy`), or `all`. |
+| `--only-hooks` | `false` | Only install Layer 1 `PreToolUse` hooks (`guard.py` + settings/plugin hook config). |
+| `--only-skills` | `false` | Only install agent skills (`install-guardrails`, `secret-leak-response`). |
+| `--only-pre-commit` | `false` | Only install Layer 2 (`.pre-commit-config.yaml` + `pre-commit install`). |
+| `--no-pre-commit` | `false` | Skip Layer 2 (`pre-commit`) during a project install. |
+| `-h`, `--help` | — | Show CLI help. |
+| `-v`, `--version` | — | Print package version. |
+
+**Files installed per scope:**
+- **Claude Code:** `<base>/hooks/agent-secret-guard.py`, upserts `PreToolUse` in `<base>/settings.json` (preserving existing settings), and `<base>/skills/{install-guardrails,secret-leak-response}/` (`<base>` is `<target>/.claude` or `~/.claude`).
+- **Antigravity CLI:** native plugin under `<base>/plugins/agent-secret-guard/` (`plugin.json`, `hooks.json`, `hooks/guard.py`, `skills/`), or `<base>/skills/` when `--only-skills` is passed (`<base>` is `<target>/.agents` or `~/.gemini/config`).
+- **Git pre-commit (project scope):** `.pre-commit-config.yaml` (never overwrites an existing config) and installs the git hook via `pre-commit install`.
+
 ### Alternative: Native plugin / `npx skills` install
 
 **Claude Code plugin:**
@@ -90,9 +110,28 @@ bash scripts/check-github-guardrails.sh owner/repo
 
 See [`docs/github-guardrails.md`](docs/github-guardrails.md) for setup instructions and [`docs/secret-leak-runbook.md`](docs/secret-leak-runbook.md) for incident response.
 
+## How It Works After Installation (Day-to-Day Usage)
+
+Once installed, **everything runs automatically in the background** — you do not need to run any command manually on every commit:
+
+1. **Agent runtime protection (automatic on every tool call):**
+   Every time Claude Code or Antigravity CLI invokes a file, search, or shell tool, the `PreToolUse` hook ([`hooks/guard.py`](hooks/guard.py)) intercepts it before execution. Access to `.env*`, keys, cloud credentials, and git guardrail bypasses (`--no-verify`, `-n`, `--force`, `core.hooksPath`) is blocked automatically with an explanation.
+2. **Git commit scanning (automatic on every `git commit`):**
+   `pre-commit` runs `gitleaks` and `detect-private-key` against staged changes and aborts the commit if a secret or private key is detected. *(Requires `pre-commit` to be installed on your machine, e.g. `brew install pre-commit` or `pipx install pre-commit`.)*
+3. **On-demand agent skills:**
+   - **`install-guardrails`**: ask your agent *"add commit guardrails / pre-commit secret scanning to this repo"* when setting up a repository without `.pre-commit-config.yaml`.
+   - **`secret-leak-response`**: ask your agent *"a secret leaked, help me rotate it and clean git history"* to follow the incident-response runbook without printing secret values.
+
 ## Releasing to npm (CI/CD)
 
-[`.github/workflows/publish.yml`](.github/workflows/publish.yml) runs the full `bats tests` suite and publishes to npm via **Trusted Publishing (OIDC)** with provenance attestation when a `v*` tag is pushed or a GitHub Release is published. Ensure `LeanoA/agent-secret-guard` (`publish.yml`) is configured as a Trusted Publisher in npm package settings, bump the version in `package.json`, `.claude-plugin/plugin.json`, and `.antigravity-plugin/plugin.json`, and push a matching `vX.Y.Z` tag.
+Normal pushes to `main` only run CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Releases to npm are triggered only when a new `v*` tag is pushed or a GitHub Release is published, using [`.github/workflows/publish.yml`](.github/workflows/publish.yml) via **Trusted Publishing (OIDC)** with provenance attestation:
+
+```bash
+# Bumps package.json, syncs .claude-plugin/plugin.json and .antigravity-plugin/plugin.json,
+# creates the release commit + vX.Y.Z tag, and pushes to GitHub to trigger npm publish
+npm version patch   # or minor / major
+git push origin main --follow-tags
+```
 
 ## Quick Verification
 
