@@ -29,7 +29,7 @@ Source: user accepted the proposal of 2026-11-22 (see L1-L2). Scope below comes 
 | T5 | S6 | inline | done | `e7c7d63`, structural readback |
 | T6 | S7 | inline | done | `ad6ae2f`, structural readback |
 | T7 | S8 | inline | partial | Published `LeanoA/agent-secret-guard` (`main`) and added to Codento CV (`777` words); sibling repo rollout deferred |
-| T8 | S9 | inline | in progress | Adding `.antigravity-plugin/plugin.json`, root `hooks.json`, dual protocol in `hooks/guard.py` (Risk: item 2 security guard) |
+| T8 | S9 | inline | done | `16afe32` + `c70fc53`, `63/63` `bats tests` PASS, `agy plugin validate .` PASS, `claude plugin validate .` PASS, independent verifier PASS (Risk: item 2 security guard) |
 
 Risk: T2 touches item 2 (security guard); verify with an independent verifier at feature end, not per task.
 Forecast: ~600 authored changed lines; above 400 → ask-on-risk chain question before the commit that crosses it.
@@ -44,3 +44,4 @@ Forecast: ~600 authored changed lines; above 400 → ask-on-risk chain question 
 - **L6 (2026-11-22):** Independent read-only verifier (`434dd993`) audited `2d096a0` (`hooks/guard.py`) and reported 8 concrete blockers (line continuations `\\\n`, env `/git` prefix, backticks/`bash -c`, `--no-veri` prefix, `GIT_CONFIG_*` overrides, unnormalized `.`/`..` paths, brace expansion/`*.env` globs, and 2 false positives `-oforce` / `-m "... .env ..."`). Fixed all 8 in `85c208c` (58/58 `bats tests` PASS, `claude plugin validate .` PASS); scoped recheck returned PASS on all 8 items. T7 (publish/rollout) remains blocked awaiting explicit user authorization.
 - **L7 (2026-11-22, verbatim):** "Hacemos eso" — user authorized merging `feat/v0.1` to `main`, creating and publishing `LeanoA/agent-secret-guard` (public), and updating the Codento CV (`20261122_ai_engineer_cv_alexander_leano_codento.md` + `.docx`, 777 words). Rollout to `edge-vision-zone-monitor` and `sim2real-data-engine` remains deferred.
 - **L8 (2026-11-22, verbatim):** "Hacemos eso" — user authorized adding native Antigravity CLI plugin support (`.antigravity-plugin/plugin.json`, root `hooks.json`, and dual `toolCall`/JSON-stdout handling in `hooks/guard.py`).
+- **L9 (2026-11-22):** Independent read-only verifier (`c8812155`) audited `16afe32` and caught 3 blockers: missing `agy` v1.5.14 tool arg keys (`AbsolutePath`, `target_file`, `File`, `NotebookPath`) and tools (`list_directory`, notebook tools, `view_content_chunk`, `search_in_file`), `*.env*` / `{...}` brace globs, and `run_command` `Cwd`. Fixed all in `c70fc53` (63/63 `bats tests` PASS, `claude plugin validate .` PASS, `agy plugin validate .` PASS with expected 1 warning on `hooks/hooks.json`); scoped recheck returned PASS on all 3 items and `hooks.json` matcher parity.
