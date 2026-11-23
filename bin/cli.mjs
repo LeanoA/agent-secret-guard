@@ -28,7 +28,12 @@ Install defense-in-depth secrets handling and commit guardrails for AI coding ag
 Usage:
   npx agent-secret-guardrails [target-dir] [options]
 
+Runs an interactive wizard (scope, agents, components) when attached to a
+terminal. Flags you pass are pre-selected and their questions are skipped.
+Use --yes, or run without a TTY (CI, scripts), to install non-interactively.
+
 Options:
+  -y, --yes                   Skip the interactive wizard and install with flags/defaults
   --target <dir>              Target project directory (defaults to current directory)
   -p, --project               Install into target project (default)
   -g, --global                Install globally into user home (~/.claude, ~/.gemini/config)
@@ -61,6 +66,8 @@ function parseArgs(argv) {
     onlySkills: false,
     onlyPreCommit: false,
     noPreCommit: false,
+    agentExplicit: false,
+    yes: false,
     help: false,
     version: false,
   };
@@ -69,6 +76,8 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
       opts.help = true;
+    } else if (arg === "-y" || arg === "--yes") {
+      opts.yes = true;
     } else if (arg === "-v" || arg === "--version") {
       opts.version = true;
     } else if (arg === "-g" || arg === "--global") {
@@ -94,8 +103,10 @@ function parseArgs(argv) {
         throw new Error(`Missing value for ${arg}.`);
       }
       opts.agent = normalizeAgent(argv[++i]);
+      opts.agentExplicit = true;
     } else if (arg.startsWith("--agent=")) {
       opts.agent = normalizeAgent(arg.slice("--agent=".length));
+      opts.agentExplicit = true;
     } else if (arg === "--target") {
       if (i + 1 >= argv.length) {
         throw new Error("Missing value for --target.");
@@ -114,6 +125,7 @@ function parseArgs(argv) {
 
   return {
     ...opts,
+    scopeExplicit: opts.scope !== null,
     scope: opts.scope || "project",
     targetDir: path.resolve(opts.targetDir || process.cwd()),
   };
@@ -313,7 +325,148 @@ function installPreCommit(targetDir, strictMode) {
   return res.status ?? 1;
 }
 
-function main() {
+function resolveSelection(opts, scope) {
+  const hasOnlyFilter =
+    opts.onlyHooks || opts.onlySkills || opts.onlyPreCommit;
+  return {
+    scope,
+    claude: opts.agent === "all" || opts.agent === "claude-code",
+    antigravity: opts.agent === "all" || opts.agent === "antigravity",
+    hooks: hasOnlyFilter ? opts.onlyHooks : true,
+    skills: hasOnlyFilter ? opts.onlySkills : true,
+    preCommit: hasOnlyFilter
+      ? opts.onlyPreCommit
+      : scope === "project" && !opts.noPreCommit,
+  };
+}
+
+function isInteractive(opts) {
+  return !opts.yes && Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
+async function loadPrompts() {
+  try {
+    return await import("@clack/prompts");
+  } catch (err) {
+    throw new Error(
+      `Interactive wizard unavailable (${err.message}). Re-run with --yes to install non-interactively.`
+    );
+  }
+}
+
+async function runWizard(opts) {
+  const p = await loadPrompts();
+  const bail = (value) => {
+    if (p.isCancel(value)) {
+      p.cancel("Installation cancelled.");
+      process.exit(0);
+    }
+    return value;
+  };
+
+  p.intro(`agent-secret-guard v${readPackageVersion()}`);
+
+  let scope = opts.scope;
+  if (!opts.scopeExplicit) {
+    scope = bail(
+      await p.select({
+        message: "Installation scope",
+        initialValue: "project",
+        options: [
+          { value: "project", label: "Project", hint: opts.targetDir },
+          {
+            value: "global",
+            label: "Global",
+            hint: "~/.claude and ~/.gemini/config",
+          },
+        ],
+      })
+    );
+  }
+
+  const selection = resolveSelection(opts, scope);
+
+  if (!opts.agentExplicit) {
+    const agents = bail(
+      await p.multiselect({
+        message: "Agents to protect",
+        initialValues: ["claude-code", "antigravity"],
+        required: true,
+        options: [
+          { value: "claude-code", label: "Claude Code" },
+          { value: "antigravity", label: "Antigravity CLI" },
+        ],
+      })
+    );
+    selection.claude = agents.includes("claude-code");
+    selection.antigravity = agents.includes("antigravity");
+  }
+
+  const componentFlags =
+    opts.onlyHooks || opts.onlySkills || opts.onlyPreCommit || opts.noPreCommit;
+  if (!componentFlags) {
+    const initialValues = ["hooks", "skills"];
+    if (scope === "project") initialValues.push("pre-commit");
+    const components = bail(
+      await p.multiselect({
+        message: "Components to install",
+        initialValues,
+        required: true,
+        options: [
+          {
+            value: "hooks",
+            label: "PreToolUse hooks",
+            hint: "Layer 1: block secret reads and git bypasses",
+          },
+          {
+            value: "skills",
+            label: "Agent skills",
+            hint: "install-guardrails, secret-leak-response",
+          },
+          {
+            value: "pre-commit",
+            label: "Git pre-commit",
+            hint: `Layer 2: gitleaks + detect-private-key in ${opts.targetDir}`,
+          },
+        ],
+      })
+    );
+    selection.hooks = components.includes("hooks");
+    selection.skills = components.includes("skills");
+    selection.preCommit = components.includes("pre-commit");
+  }
+
+  const agentLabels = [
+    selection.claude && "Claude Code",
+    selection.antigravity && "Antigravity CLI",
+  ].filter(Boolean);
+  const componentLabels = [
+    selection.hooks && "hooks",
+    selection.skills && "skills",
+    selection.preCommit && "pre-commit",
+  ].filter(Boolean);
+  p.note(
+    [
+      `Scope:      ${scope}`,
+      `Target:     ${scope === "global" ? "user home" : opts.targetDir}`,
+      `Agents:     ${agentLabels.join(", ") || "none"}`,
+      `Components: ${componentLabels.join(", ")}`,
+    ].join("\n"),
+    "Summary"
+  );
+
+  const proceed = bail(
+    await p.confirm({ message: "Proceed with installation?", initialValue: true })
+  );
+  if (!proceed) {
+    p.cancel("Installation cancelled.");
+    process.exit(0);
+  }
+
+  return selection;
+}
+
+async function main() {
   let opts;
   try {
     opts = parseArgs(process.argv.slice(2));
@@ -332,14 +485,6 @@ function main() {
     process.exit(0);
   }
 
-  const hasOnlyFilter =
-    opts.onlyHooks || opts.onlySkills || opts.onlyPreCommit;
-  const wantHooks = hasOnlyFilter ? opts.onlyHooks : true;
-  const wantSkills = hasOnlyFilter ? opts.onlySkills : true;
-  let wantPreCommit = hasOnlyFilter
-    ? opts.onlyPreCommit
-    : opts.scope === "project" && !opts.noPreCommit;
-
   if (opts.noPreCommit && opts.onlyPreCommit) {
     process.stderr.write(
       "error: Cannot combine --only-pre-commit and --no-pre-commit.\n"
@@ -347,25 +492,34 @@ function main() {
     process.exit(1);
   }
 
-  if (opts.noPreCommit) {
-    wantPreCommit = false;
+  let selection;
+  try {
+    selection = isInteractive(opts)
+      ? await runWizard(opts)
+      : resolveSelection(opts, opts.scope);
+  } catch (err) {
+    process.stderr.write(`error: ${err.message}\n`);
+    process.exit(1);
   }
 
-  const homeDir = process.env.HOME || os.homedir();
-  const wantClaude = opts.agent === "all" || opts.agent === "claude-code";
-  const wantAgy = opts.agent === "all" || opts.agent === "antigravity";
+  const scope = selection.scope;
+  const wantHooks = selection.hooks;
+  const wantSkills = selection.skills;
+  const wantPreCommit = selection.preCommit;
 
-  process.stdout.write(
-    `Installing agent-secret-guard (${opts.scope} scope)...\n`
-  );
+  const homeDir = process.env.HOME || os.homedir();
+  const wantClaude = selection.claude;
+  const wantAgy = selection.antigravity;
+
+  process.stdout.write(`Installing agent-secret-guard (${scope} scope)...\n`);
 
   try {
     if ((wantHooks || wantSkills) && wantClaude) {
       const claudeBase =
-        opts.scope === "global"
+        scope === "global"
           ? path.join(homeDir, ".claude")
           : path.join(opts.targetDir, ".claude");
-      installClaudeCode(claudeBase, opts.scope, {
+      installClaudeCode(claudeBase, scope, {
         hooks: wantHooks,
         skills: wantSkills,
       });
@@ -373,7 +527,7 @@ function main() {
 
     if ((wantHooks || wantSkills) && wantAgy) {
       const agyBase =
-        opts.scope === "global"
+        scope === "global"
           ? path.join(homeDir, ".gemini", "config")
           : path.join(opts.targetDir, ".agents");
       installAntigravity(agyBase, {

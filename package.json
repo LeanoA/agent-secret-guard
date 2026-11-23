@@ -33,10 +33,13 @@
     "antigravity"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20.12"
   },
   "scripts": {
     "test": "bats tests",
     "version": "node -e 'const fs=require(\"fs\"),v=require(\"./package.json\").version;for(const f of[\".claude-plugin/plugin.json\",\".antigravity-plugin/plugin.json\"]){const j=JSON.parse(fs.readFileSync(f,\"utf8\"));j.version=v;fs.writeFileSync(f,JSON.stringify(j,null,2)+\"\\n\");}' && git add .claude-plugin/plugin.json .antigravity-plugin/plugin.json"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.9.0"
   }
 }

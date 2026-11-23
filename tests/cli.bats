@@ -128,3 +128,24 @@ EOF
   [ -f "$repo/.pre-commit-config.yaml" ]
   grep -qx "$(cd "$repo" && pwd -P) install" "$scratch/pre-commit.log"
 }
+
+@test "CLI: --yes and -y install non-interactively with defaults" {
+  run env PATH="$fakebin:$PATH" HOME="$fakehome" node "$CLI" "$repo" --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Proceed with installation"* ]]
+  [ -x "$repo/.claude/hooks/agent-secret-guard.py" ]
+  [ -f "$repo/.agents/plugins/agent-secret-guard/plugin.json" ]
+  [ -f "$repo/.pre-commit-config.yaml" ]
+  [[ "$output" == *"Done."* ]]
+
+  run env PATH="$fakebin:$PATH" HOME="$fakehome" node "$CLI" -y --global "$repo"
+  [ "$status" -eq 0 ]
+  [ -x "$fakehome/.claude/hooks/agent-secret-guard.py" ]
+}
+
+@test "CLI: --help documents the interactive wizard and --yes" {
+  run node "$CLI" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"interactive wizard"* ]]
+  [[ "$output" == *"-y, --yes"* ]]
+}

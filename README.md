@@ -25,10 +25,16 @@ Safe templates (`.env.example`, `.env.sample`, `.env.template`), public SSH keys
 
 ### Quickstart via `npx` (recommended)
 
-Run inside your repository root to install **Layer 1** (hooks + skills for both Claude Code and Antigravity CLI) and **Layer 2** (`.pre-commit-config.yaml` + `pre-commit install`) in one step:
+Run inside your repository root. In a terminal, an interactive wizard asks for the **scope** (project or global), the **agents** (Claude Code, Antigravity CLI), and the **components** (hooks, skills, pre-commit), shows a summary, and asks for confirmation. Flags you pass are pre-selected and their questions are skipped:
 
 ```bash
 npx agent-secret-guardrails@latest
+```
+
+To install **Layer 1** (hooks + skills for both Claude Code and Antigravity CLI) and **Layer 2** (`.pre-commit-config.yaml` + `pre-commit install`) without prompts, pass `--yes`. Without a TTY (CI, scripts) the CLI never prompts and uses flags/defaults:
+
+```bash
+npx agent-secret-guardrails@latest --yes
 ```
 
 Useful flags:
@@ -43,10 +49,13 @@ npx agent-secret-guardrails@latest --agent antigravity --only-skills
 npx agent-secret-guardrails@latest --no-pre-commit
 ```
 
+Requires Node.js 20.12 or newer.
+
 #### CLI Options Reference
 
 | Flag | Default | Description |
 |---|---|---|
+| `-y`, `--yes` | `false` | Skip the interactive wizard and install with flags/defaults. Implied when stdin/stdout is not a TTY. |
 | `[target-dir]` / `--target <dir>` | `.` (`cwd`) | Target project directory. |
 | `-p`, `--project` | `(default)` | Install into target project (`.claude/`, `.agents/`, `.pre-commit-config.yaml`). |
 | `-g`, `--global` | `false` | Install Layer 1 globally into `~/.claude/` and `~/.gemini/config/plugins/agent-secret-guard/`. Skips `pre-commit` unless `--only-pre-commit` is passed. |
