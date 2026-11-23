@@ -137,6 +137,30 @@ assert_allowed() {
   assert_blocked
 }
 
+@test "S2: normalized . / .. paths, brace expansion, and wildcard globs are blocked" {
+  run_guard Read '{"file_path": "~/.aws/./credentials"}'
+  assert_blocked
+  run_guard Read '{"file_path": "~/.aws/sub/../credentials"}'
+  assert_blocked
+  run_guard Read '{"file_path": "~/.aws/."}'
+  assert_blocked
+  run_guard Read '{"file_path": "~/.config/./gcloud"}'
+  assert_blocked
+  run_guard Bash '{"command": "cat {.env,.env.example}"}'
+  assert_blocked
+  run_guard Glob '{"pattern": "*.env"}'
+  assert_blocked
+  run_guard Glob '{"pattern": "**/.aws/*"}'
+  assert_blocked
+}
+
+@test "S2: git commit message mentioning .env is allowed, but command substitution is blocked" {
+  run_guard Bash '{"command": "git commit -m \"fix .env parsing\""}'
+  assert_allowed
+  run_guard Bash '{"command": "git commit -m \"$(cat .env)\""}'
+  assert_blocked
+}
+
 @test "S2: Read ordinary source file is allowed" {
   run_guard Read '{"file_path": "/repo/src/environment.py"}'
   assert_allowed
@@ -259,8 +283,30 @@ assert_allowed() {
 @test "S3: multiline command cannot bypass guardrails and unclosed quote fails closed" {
   run_guard Bash '{"command": "echo ok\ngit commit --no-verify -m wip"}'
   assert_blocked
+  run_guard Bash '{"command": "git commit \\\n --no-verify -m wip"}'
+  assert_blocked
   run_guard Bash '{"command": "git commit -m \"unclosed"}'
   assert_blocked
+}
+
+@test "S3: env /git prefix, backticks, bash -c, --no-veri, and GIT_CONFIG env vars are blocked" {
+  run_guard Bash '{"command": "env FOO=/usr/bin/git git commit --no-verify"}'
+  assert_blocked
+  run_guard Bash '{"command": "echo `git commit --no-verify -m wip`"}'
+  assert_blocked
+  run_guard Bash '{"command": "bash -c '\''git commit --no-verify -m wip'\''"}'
+  assert_blocked
+  run_guard Bash '{"command": "git commit --no-veri -m wip"}'
+  assert_blocked
+  run_guard Bash '{"command": "GIT_CONFIG_PARAMETERS=\"\x27core.hooksPath=/dev/null\x27\" git commit -m wip"}'
+  assert_blocked
+  run_guard Bash '{"command": "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m wip"}'
+  assert_blocked
+}
+
+@test "S3: git push -oforce (push-option) does not false-positive as -f" {
+  run_guard Bash '{"command": "git push -oforce origin main"}'
+  assert_allowed
 }
 
 @test "S3: quoted flags and refspecs are still blocked" {
