@@ -92,7 +92,7 @@ See [`docs/github-guardrails.md`](docs/github-guardrails.md) for setup instructi
 
 ## Releasing to npm (CI/CD)
 
-[`.github/workflows/publish.yml`](.github/workflows/publish.yml) runs the full `bats tests` suite and publishes to npm with provenance attestation when a `v*` tag is pushed or a GitHub Release is published. Configure the `NPM_TOKEN` repository secret in GitHub Settings, bump the version in `package.json`, `.claude-plugin/plugin.json`, and `.antigravity-plugin/plugin.json`, and push a matching `vX.Y.Z` tag.
+[`.github/workflows/publish.yml`](.github/workflows/publish.yml) runs the full `bats tests` suite and publishes to npm via **Trusted Publishing (OIDC)** with provenance attestation when a `v*` tag is pushed or a GitHub Release is published. Ensure `LeanoA/agent-secret-guard` (`publish.yml`) is configured as a Trusted Publisher in npm package settings, bump the version in `package.json`, `.claude-plugin/plugin.json`, and `.antigravity-plugin/plugin.json`, and push a matching `vX.Y.Z` tag.
 
 ## Quick Verification
 
