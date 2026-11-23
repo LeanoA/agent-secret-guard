@@ -26,7 +26,7 @@ Source: user accepted the proposal of 2026-11-22 (see L1-L2). Scope below comes 
 | T4 | S5 | inline | done | `2fc757a`, 4/4 `bats tests/github_guardrails.bats` PASS |
 | T5 | S6 | inline | done | `e7c7d63`, structural readback |
 | T6 | S7 | inline | done | `ad6ae2f`, structural readback |
-| T7 | S8 | needs user OK | blocked (publishing) | — |
+| T7 | S8 | inline | partial | Published `LeanoA/agent-secret-guard` (`main`) and added to Codento CV (`777` words); sibling repo rollout deferred |
 
 Risk: T2 touches item 2 (security guard); verify with an independent verifier at feature end, not per task.
 Forecast: ~600 authored changed lines; above 400 → ask-on-risk chain question before the commit that crosses it.
@@ -39,3 +39,4 @@ Forecast: ~600 authored changed lines; above 400 → ask-on-risk chain question 
 - **L4 (2026-11-22):** Independent read-only verifier (`c5a044e7`) audited `a9a192a..ad6ae2f`, passed S1/S4/S5/S6/S7 and flagged 4 concrete blockers in `hooks/guard.sh` (secret dirs without trailing slash, attached/mixed-case `-c core.hooksPath`, `--git-dir`/`--work-tree`/`/usr/bin/git`, blind quote stripping) plus `~/.ssh/*.pub` order. Fixed all in `7122644` with 5 regression tests (53/53 `bats` PASS); scoped recheck returned PASS on all items. T7 (publish/rollout) remains blocked awaiting explicit user authorization.
 - **L5 (2026-11-22, verbatim):** "Lo pasemos" — user approved migrating `hooks/guard.sh` to pure-stdlib `hooks/guard.py`.
 - **L6 (2026-11-22):** Independent read-only verifier (`434dd993`) audited `2d096a0` (`hooks/guard.py`) and reported 8 concrete blockers (line continuations `\\\n`, env `/git` prefix, backticks/`bash -c`, `--no-veri` prefix, `GIT_CONFIG_*` overrides, unnormalized `.`/`..` paths, brace expansion/`*.env` globs, and 2 false positives `-oforce` / `-m "... .env ..."`). Fixed all 8 in `85c208c` (58/58 `bats tests` PASS, `claude plugin validate .` PASS); scoped recheck returned PASS on all 8 items. T7 (publish/rollout) remains blocked awaiting explicit user authorization.
+- **L7 (2026-11-22, verbatim):** "Hacemos eso" — user authorized merging `feat/v0.1` to `main`, creating and publishing `LeanoA/agent-secret-guard` (public), and updating the Codento CV (`20261122_ai_engineer_cv_alexander_leano_codento.md` + `.docx`, 777 words). Rollout to `edge-vision-zone-monitor` and `sim2real-data-engine` remains deferred.
