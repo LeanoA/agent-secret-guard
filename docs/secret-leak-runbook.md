@@ -45,6 +45,6 @@ Confirm exit code `0` with zero findings across the full history.
 
 1. Verify `.gitignore` excludes `.env`, `.env.*` (except `.env.example`), `*.pem`, `*.key`, and credential files.
 2. Confirm `.pre-commit-config.yaml` with `gitleaks` and `detect-private-key` is committed and installed (`pre-commit install`).
-3. Confirm the Claude Code `claude-code-guardrails` plugin is enabled so the agent cannot read secret files or run `--no-verify`.
+3. Confirm the `agent-secret-guard` hook/plugin is enabled so the agent cannot read secret files or run `--no-verify`.
 4. Confirm GitHub Secret Scanning and Push Protection are enabled (`bash scripts/check-github-guardrails.sh owner/repo`).
 5. Record a brief blameless post-mortem note (what leaked, how it bypassed controls, which guardrail was added) — never include the secret value.

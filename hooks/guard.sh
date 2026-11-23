@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# claude-code-guardrails — PreToolUse hook for Claude Code.
+# agent-secret-guard — PreToolUse hook for AI coding agents (Claude Code format).
 #
 # Blocks the agent from reading or editing secret files and from bypassing
 # git guardrails (pre-commit hooks, force pushes).
@@ -12,7 +12,7 @@
 set -uo pipefail
 
 block() {
-  printf 'claude-code-guardrails: blocked: %s\n' "$1" >&2
+  printf 'agent-secret-guard: blocked: %s\n' "$1" >&2
   exit 2
 }
 

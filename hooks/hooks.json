@@ -1,5 +1,5 @@
 {
-  "description": "claude-code-guardrails: block agent access to secret files and git guardrail bypasses",
+  "description": "agent-secret-guard: block agent access to secret files and git guardrail bypasses",
   "hooks": {
     "PreToolUse": [
       {

@@ -1,6 +1,6 @@
-# claude-code-guardrails
+# agent-secret-guard
 
-Defense-in-depth secrets handling and commit guardrails for engineering teams adopting **Claude Code**.
+Defense-in-depth secrets handling and commit guardrails for engineering teams adopting **AI coding agents** (ships as a native **Claude Code** plugin plus agent-agnostic git, CI, and runbook tooling).
 
 ## Why
 
@@ -9,7 +9,7 @@ When teams roll out AI coding agents onto real repositories, two failure modes s
 1. **Secret exposure to the agent context** — the agent reads `.env`, SSH keys, cloud credentials, or service-account JSONs while debugging.
 2. **Guardrail bypasses** — when a pre-commit hook fails, an agent may try `git commit --no-verify` or `git push --force` to get unstuck.
 
-`claude-code-guardrails` packages three layers into one installable Claude Code plugin so teams can standardize safe defaults across repositories.
+`agent-secret-guard` combines three layers so teams can standardize safe defaults across repositories. Layer 1 ships as a native Claude Code `PreToolUse` plugin; Layers 2, 3, and the `SKILL.md` playbooks work with **any** coding agent (Claude Code, Antigravity, Cursor, Codex, etc.).
 
 ## Architecture (3 Layers)
 
@@ -26,14 +26,14 @@ Safe templates (`.env.example`, `.env.sample`, `.env.template`), public SSH keys
 ### 1. Install the Claude Code plugin
 
 ```bash
-claude plugin marketplace add LeanoA/claude-code-guardrails
-claude plugin install claude-code-guardrails@claude-code-guardrails
+claude plugin marketplace add LeanoA/agent-secret-guard
+claude plugin install agent-secret-guard@agent-secret-guard
 ```
 
 Or test locally from a clone:
 
 ```bash
-claude --plugin-dir /path/to/claude-code-guardrails
+claude --plugin-dir /path/to/agent-secret-guard
 ```
 
 ### 2. Add commit guardrails to a repository
@@ -69,7 +69,7 @@ Example of a blocked tool call:
 ```bash
 printf '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/repo/.env"}}' \
   | ./hooks/guard.sh
-# stderr: claude-code-guardrails: blocked: Read on secret file '/repo/.env'. Ask the user to handle secrets outside the agent.
+# stderr: agent-secret-guard: blocked: Read on secret file '/repo/.env'. Ask the user to handle secrets outside the agent.
 # exit code: 2
 ```
 

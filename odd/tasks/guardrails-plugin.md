@@ -1,4 +1,4 @@
-# Feature: claude-code-guardrails v0.1
+# Feature: agent-secret-guard v0.1
 
 Objective: reusable Claude Code plugin + git/CI templates that enforce secrets handling and commit guardrails for a developer team; portfolio evidence for the Codento Senior AI Engineer JD.
 Branch: `main` (scaffold) then `feat/v0.1` | Delivery: ask-on-risk, local only (publishing is the user's decision) | Test runner: `bats tests`

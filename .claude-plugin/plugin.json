@@ -1,12 +1,12 @@
 {
-  "name": "claude-code-guardrails",
+  "name": "agent-secret-guard",
   "version": "0.1.0",
-  "description": "Secrets handling and commit guardrails for teams using Claude Code: blocks agent access to secret files and git hook bypasses.",
+  "description": "Defense-in-depth secrets handling and commit guardrails for teams using AI coding agents (native Claude Code plugin + universal git/GitHub guardrails).",
   "author": {
     "name": "Alexander Nelson Leano",
     "url": "https://github.com/LeanoA"
   },
-  "repository": "https://github.com/LeanoA/claude-code-guardrails",
+  "repository": "https://github.com/LeanoA/agent-secret-guard",
   "license": "MIT",
-  "keywords": ["security", "secrets", "guardrails", "hooks", "pre-commit", "gitleaks"]
+  "keywords": ["security", "secrets", "guardrails", "hooks", "pre-commit", "gitleaks", "claude-code"]
 }

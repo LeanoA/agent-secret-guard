@@ -1,6 +1,6 @@
-# Commit guardrails installed by claude-code-guardrails.
+# Commit guardrails installed by agent-secret-guard.
 # Blocks commits that contain secrets or private keys.
-# Docs: https://github.com/LeanoA/claude-code-guardrails
+# Docs: https://github.com/LeanoA/agent-secret-guard
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1

@@ -16,7 +16,7 @@ run_guard() {
 
 assert_blocked() {
   [ "$status" -eq 2 ] || { echo "expected exit 2, got $status: $output"; return 1; }
-  [[ "$output" == *"claude-code-guardrails"* ]] || { echo "missing reason: $output"; return 1; }
+  [[ "$output" == *"agent-secret-guard"* ]] || { echo "missing reason: $output"; return 1; }
 }
 
 assert_allowed() {

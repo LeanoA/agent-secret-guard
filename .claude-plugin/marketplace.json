@@ -1,15 +1,15 @@
 {
-  "name": "claude-code-guardrails",
-  "description": "Single-plugin marketplace for claude-code-guardrails.",
+  "name": "agent-secret-guard",
+  "description": "Single-plugin marketplace for agent-secret-guard.",
   "owner": {
     "name": "Alexander Nelson Leano",
     "url": "https://github.com/LeanoA"
   },
   "plugins": [
     {
-      "name": "claude-code-guardrails",
+      "name": "agent-secret-guard",
       "source": "./",
-      "description": "Secrets handling and commit guardrails for teams using Claude Code."
+      "description": "Secrets handling and commit guardrails for teams using AI coding agents."
     }
   ]
 }
