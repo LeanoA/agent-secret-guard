@@ -1,6 +1,6 @@
 {
   "name": "agent-secret-guardrails",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Defense-in-depth secrets handling and commit guardrails for AI coding agents (Claude Code & Antigravity CLI).",
   "license": "MIT",
   "author": "Alexander Nelson Leano (https://github.com/LeanoA)",
