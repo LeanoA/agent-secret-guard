@@ -338,3 +338,68 @@ assert_allowed() {
   run bash -c 'printf "not json" | "$1"' _ "$GUARD"
   assert_blocked
 }
+
+# --- Antigravity CLI PreToolUse contract ------------------------------------
+
+agy_payload() {
+  jq -cn --arg name "$1" --argjson args "$2" \
+    '{hookEventName: "PreToolUse", cwd: "/repo", toolCall: {id: "toolu_01", name: $name, args: $args}}'
+}
+
+run_agy_guard() {
+  run bash -c 'printf "%s" "$1" | "$2"' _ "$(agy_payload "$1" "$2")" "$GUARD"
+}
+
+assert_agy_denied() {
+  [ "$status" -eq 0 ] || { echo "expected exit 0, got $status: $output"; return 1; }
+  [ "$(printf '%s' "$output" | jq -r '.decision')" = "deny" ] || { echo "expected deny, got: $output"; return 1; }
+  [[ "$(printf '%s' "$output" | jq -r '.reason')" == *"agent-secret-guard"* ]]
+}
+
+assert_agy_allowed() {
+  [ "$status" -eq 0 ] || { echo "expected exit 0, got $status: $output"; return 1; }
+  [ "$(printf '%s' "$output" | jq -r '.decision')" = "allow" ] || { echo "expected allow, got: $output"; return 1; }
+}
+
+@test "AGY: read_file and write_file on secret files are denied" {
+  run_agy_guard read_file '{"Path": "/repo/.env"}'
+  assert_agy_denied
+  run_agy_guard write_file '{"Path": "/repo/tls/server.key", "Content": "x"}'
+  assert_agy_denied
+  run_agy_guard edit_file '{"Path": "/home/u/.aws/./credentials"}'
+  assert_agy_denied
+}
+
+@test "AGY: read_file on .env.example and ~/.ssh/*.pub are allowed" {
+  run_agy_guard read_file '{"Path": "/repo/.env.example"}'
+  assert_agy_allowed
+  run_agy_guard read_file '{"Path": "/home/u/.ssh/id_ed25519.pub"}'
+  assert_agy_allowed
+}
+
+@test "AGY: find_by_name and grep_search enforce secret globs without flagging search Query" {
+  run_agy_guard find_by_name '{"SearchDirectory": "/repo", "Pattern": "**/.env*"}'
+  assert_agy_denied
+  run_agy_guard grep_search '{"SearchPath": "/repo", "Includes": ["*.env"], "Query": "SECRET"}'
+  assert_agy_denied
+  run_agy_guard grep_search '{"SearchPath": "/repo/src", "Query": ".env"}'
+  assert_agy_allowed
+}
+
+@test "AGY: run_command blocks secret reads and git guardrail bypasses" {
+  run_agy_guard run_command '{"CommandLine": "cat .env"}'
+  assert_agy_denied
+  run_agy_guard run_command '{"CommandLine": "git commit --no-veri -m wip"}'
+  assert_agy_denied
+  run_agy_guard run_command '{"CommandLine": "git push --force origin main"}'
+  assert_agy_denied
+  run_agy_guard run_command '{"CommandLine": "pytest tests/ -q && git status"}'
+  assert_agy_allowed
+}
+
+@test "AGY: unknown tools are allowed and malformed toolCall denies" {
+  run_agy_guard ask_question '{"questions": []}'
+  assert_agy_allowed
+  run bash -c 'printf "%s" "{\"hookEventName\":\"PreToolUse\",\"toolCall\":\"bad\"}" | "$1"' _ "$GUARD"
+  assert_agy_denied
+}

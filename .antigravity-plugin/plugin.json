@@ -1,0 +1,10 @@
+{
+  "name": "agent-secret-guard",
+  "version": "0.1.0",
+  "description": "Defense-in-depth secrets handling and commit guardrails for teams using AI coding agents.",
+  "author": {
+    "name": "Alexander Nelson Leano",
+    "url": "https://github.com/LeanoA"
+  },
+  "repository": "https://github.com/LeanoA/agent-secret-guard"
+}

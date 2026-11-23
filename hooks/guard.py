@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""agent-secret-guard — PreToolUse hook for AI coding agents (Claude Code format).
+"""agent-secret-guard — PreToolUse hook for Claude Code and Antigravity CLI.
 
 Blocks the agent from reading or editing secret files and from bypassing
 git guardrails (pre-commit hooks, force pushes). Pure Python 3 stdlib.
 
-Contract (Claude Code hooks): the payload arrives as JSON on stdin.
-  exit 0 -> allow the tool call
-  exit 2 -> block it; stderr is shown to the agent as the reason
+Contracts:
+  Claude Code (tool_name / tool_input):
+    exit 0 -> allow
+    exit 2 -> block; reason on stderr
+  Antigravity (toolCall / hookEventName):
+    exit 0 -> allow with {"decision": "allow"} on stdout
+    exit 0 -> block with {"decision": "deny", "reason": "..."} on stdout
 """
 
 from __future__ import annotations
@@ -18,8 +22,40 @@ import shlex
 import sys
 from typing import NoReturn
 
-FILE_TOOLS = frozenset(
+CLAUDE_FILE_TOOLS = frozenset(
     {"Read", "Edit", "Write", "MultiEdit", "NotebookEdit", "Grep", "Glob"}
+)
+AGY_FILE_TOOLS = frozenset(
+    {
+        "read_file",
+        "write_file",
+        "edit_file",
+        "list_dir",
+        "grep_search",
+        "find_by_name",
+        "view_file",
+        "write_to_file",
+        "replace_file_content",
+        "multi_replace_file_content",
+        "view_file_outline",
+        "view_code_item",
+    }
+)
+AGY_PATH_KEYS = (
+    "Path",
+    "path",
+    "TargetFile",
+    "targetFile",
+    "SearchPath",
+    "searchPath",
+    "SearchDirectory",
+    "searchDirectory",
+    "DirectoryPath",
+    "directoryPath",
+    "FilePath",
+    "filePath",
+    "Includes",
+    "includes",
 )
 SAFE_BASENAMES = frozenset({".env.example", ".env.sample", ".env.template"})
 SAFE_SUFFIXES = (".env.example", ".env.sample", ".env.template", ".pub")
@@ -59,10 +95,13 @@ SECRET_SPLIT_RE = re.compile(r'[;|&\n<>()"\'`=\s{},]+')
 GIT_CONFIG_KEY_RE = re.compile(r"^GIT_CONFIG_KEY_\d+=(.+)$")
 
 
+class GuardBlocked(Exception):
+    """Raised when a guardrail blocks the requested tool call."""
+
+
 def block(reason: str) -> NoReturn:
-    """Print a guardrail block reason to stderr and exit with code 2."""
-    sys.stderr.write(f"agent-secret-guard: blocked: {reason}\n")
-    raise SystemExit(2)
+    """Signal a guardrail block with a human-readable reason."""
+    raise GuardBlocked(reason)
 
 
 def is_secret_path(raw: str) -> bool:
@@ -345,7 +384,9 @@ def check_shell_invocation(tokens: list[str], depth: int) -> None:
             j = i + 1
             while j < len(tokens):
                 arg = tokens[j]
-                if arg == "-c" or (arg.startswith("-") and not arg.startswith("--") and "c" in arg[1:]):
+                if arg == "-c" or (
+                    arg.startswith("-") and not arg.startswith("--") and "c" in arg[1:]
+                ):
                     if j + 1 < len(tokens):
                         check_bash_command(tokens[j + 1], depth + 1)
                     return
@@ -370,36 +411,95 @@ def check_bash_command(command: str, depth: int = 0) -> None:
         check_shell_invocation(seg, depth)
 
 
-def main() -> int:
-    try:
-        payload = json.load(sys.stdin)
-    except Exception:
+def check_secret_value(tool: str, val: object) -> None:
+    """Validate a string or list-of-strings argument against is_secret_path."""
+    items = val if isinstance(val, list) else [val]
+    for item in items:
+        if isinstance(item, str) and item and is_secret_path(item):
+            block(
+                f"{tool} on secret file '{item}'. "
+                "Ask the user to handle secrets outside the agent."
+            )
+
+
+def handle_claude(payload: dict) -> None:
+    """Evaluate a Claude Code PreToolUse payload."""
+    tool = payload.get("tool_name")
+    if not isinstance(tool, str):
         block("could not parse the hook payload (failing closed)")
 
-    if not isinstance(payload, dict) or not isinstance(payload.get("tool_name"), str):
-        block("could not parse the hook payload (failing closed)")
-
-    tool = payload["tool_name"]
     tool_input = payload.get("tool_input")
     if not isinstance(tool_input, dict):
         tool_input = {}
 
-    if tool in FILE_TOOLS:
+    if tool in CLAUDE_FILE_TOOLS:
         keys = ["file_path", "notebook_path", "path", "glob"]
         if tool == "Glob":
             keys.append("pattern")
         for key in keys:
-            val = tool_input.get(key)
-            if isinstance(val, str) and val and is_secret_path(val):
-                block(
-                    f"{tool} on secret file '{val}'. "
-                    "Ask the user to handle secrets outside the agent."
-                )
+            check_secret_value(tool, tool_input.get(key))
     elif tool == "Bash":
         command = tool_input.get("command")
         if isinstance(command, str) and command:
             check_bash_command(command)
 
+
+def handle_antigravity(payload: dict) -> None:
+    """Evaluate an Antigravity PreToolUse payload."""
+    tool_call = payload.get("toolCall")
+    if not isinstance(tool_call, dict) or not isinstance(tool_call.get("name"), str):
+        block("could not parse Antigravity toolCall payload (failing closed)")
+
+    tool = tool_call["name"].lower()
+    args = tool_call.get("args")
+    if not isinstance(args, dict):
+        args = {}
+
+    if tool in AGY_FILE_TOOLS:
+        keys = list(AGY_PATH_KEYS)
+        if tool == "find_by_name":
+            keys.extend(["Pattern", "pattern"])
+        for key in keys:
+            check_secret_value(tool, args.get(key))
+    elif tool == "run_command":
+        for key in ("CommandLine", "commandLine", "command"):
+            cmd = args.get(key)
+            if isinstance(cmd, str) and cmd:
+                check_bash_command(cmd)
+                break
+
+
+def main() -> int:
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        sys.stderr.write(
+            "agent-secret-guard: blocked: could not parse the hook payload (failing closed)\n"
+        )
+        return 2
+
+    if not isinstance(payload, dict):
+        sys.stderr.write(
+            "agent-secret-guard: blocked: could not parse the hook payload (failing closed)\n"
+        )
+        return 2
+
+    is_agy = "toolCall" in payload or "hookEventName" in payload
+    try:
+        if is_agy:
+            handle_antigravity(payload)
+        else:
+            handle_claude(payload)
+    except GuardBlocked as exc:
+        msg = f"agent-secret-guard: blocked: {exc}"
+        if is_agy:
+            sys.stdout.write(json.dumps({"decision": "deny", "reason": msg}) + "\n")
+            return 0
+        sys.stderr.write(msg + "\n")
+        return 2
+
+    if is_agy:
+        sys.stdout.write('{"decision": "allow"}\n')
     return 0
 
 
