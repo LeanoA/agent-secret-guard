@@ -5,7 +5,7 @@ description: Guide an engineer through containing, rotating, purging, and preven
 
 # Secret Leak Response
 
-Follow [`docs/secret-leak-runbook.md`](../../docs/secret-leak-runbook.md) step by step.
+Follow [`references/secret-leak-runbook.md`](references/secret-leak-runbook.md) step by step.
 
 ## Hard rules
 

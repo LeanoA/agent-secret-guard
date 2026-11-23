@@ -23,9 +23,29 @@ Safe templates (`.env.example`, `.env.sample`, `.env.template`), public SSH keys
 
 ## Installation
 
-### 1. Install the agent plugin
+### Quickstart via `npx` (recommended)
 
-**Claude Code:**
+Run inside your repository root to install **Layer 1** (hooks + skills for both Claude Code and Antigravity CLI) and **Layer 2** (`.pre-commit-config.yaml` + `pre-commit install`) in one step:
+
+```bash
+npx agent-secret-guardrails@latest
+```
+
+Useful flags:
+
+```bash
+# Install Layer 1 globally (~/.claude and ~/.gemini/config/plugins/agent-secret-guard)
+npx agent-secret-guardrails@latest --global
+
+# Target a specific agent or component
+npx agent-secret-guardrails@latest --agent claude-code --only-hooks
+npx agent-secret-guardrails@latest --agent antigravity --only-skills
+npx agent-secret-guardrails@latest --no-pre-commit
+```
+
+### Alternative: Native plugin / `npx skills` install
+
+**Claude Code plugin:**
 
 ```bash
 claude plugin marketplace add LeanoA/agent-secret-guard
@@ -38,7 +58,7 @@ Or test locally from a clone:
 claude --plugin-dir /path/to/agent-secret-guard
 ```
 
-**Antigravity CLI:**
+**Antigravity CLI plugin:**
 
 Clone into your workspace or global plugins directory (`.agents/plugins/agent-secret-guard` or `~/.gemini/config/plugins/agent-secret-guard`), or install from a local clone:
 
@@ -46,9 +66,15 @@ Clone into your workspace or global plugins directory (`.agents/plugins/agent-se
 agy plugin install /path/to/agent-secret-guard
 ```
 
-### 2. Add commit guardrails to a repository
+**Skills only (`npx skills`):**
 
-Ask Claude Code to run the `install-guardrails` skill, or run the script directly:
+```bash
+npx skills add LeanoA/agent-secret-guard --skill '*' --copy -y
+```
+
+### Add commit guardrails manually to a repository
+
+Ask your agent to run the `install-guardrails` skill, or run the script directly:
 
 ```bash
 bash skills/install-guardrails/scripts/install.sh /path/to/your-repo
@@ -56,13 +82,17 @@ bash skills/install-guardrails/scripts/install.sh /path/to/your-repo
 
 The installer refuses to overwrite an existing `.pre-commit-config.yaml`.
 
-### 3. Audit GitHub server-side controls
+### Audit GitHub server-side controls
 
 ```bash
 bash scripts/check-github-guardrails.sh owner/repo
 ```
 
 See [`docs/github-guardrails.md`](docs/github-guardrails.md) for setup instructions and [`docs/secret-leak-runbook.md`](docs/secret-leak-runbook.md) for incident response.
+
+## Releasing to npm (CI/CD)
+
+[`.github/workflows/publish.yml`](.github/workflows/publish.yml) runs the full `bats tests` suite and publishes to npm with provenance attestation when a `v*` tag is pushed or a GitHub Release is published. Configure the `NPM_TOKEN` repository secret in GitHub Settings, bump the version in `package.json`, `.claude-plugin/plugin.json`, and `.antigravity-plugin/plugin.json`, and push a matching `vX.Y.Z` tag.
 
 ## Quick Verification
 
