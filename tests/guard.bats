@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
-# Tests for hooks/guard.sh: the PreToolUse hook that blocks agent access to
+# Tests for hooks/guard.py: the PreToolUse hook that blocks agent access to
 # secret files (S2) and git guardrail bypasses (S3).
 
-GUARD="$BATS_TEST_DIRNAME/../hooks/guard.sh"
+GUARD="$BATS_TEST_DIRNAME/../hooks/guard.py"
 
 # Build a PreToolUse payload: tool name + tool_input JSON object.
 payload() {
@@ -243,12 +243,23 @@ assert_allowed() {
   assert_blocked
 }
 
-@test "S3: --git-dir, --work-tree, and full-path /usr/bin/git cannot bypass guardrails" {
+@test "S3: --git-dir, --work-tree, --config-env, and full-path /usr/bin/git cannot bypass guardrails" {
   run_guard Bash '{"command": "git --git-dir .git commit --no-verify -m wip"}'
+  assert_blocked
+  run_guard Bash '{"command": "git --git-dir=.git commit --no-verify -m wip"}'
   assert_blocked
   run_guard Bash '{"command": "git --work-tree . commit --no-verify -m wip"}'
   assert_blocked
+  run_guard Bash '{"command": "git --config-env=core.hooksPath=HOOK_ENV commit -m wip"}'
+  assert_blocked
   run_guard Bash '{"command": "/usr/bin/git commit --no-verify -m wip"}'
+  assert_blocked
+}
+
+@test "S3: multiline command cannot bypass guardrails and unclosed quote fails closed" {
+  run_guard Bash '{"command": "echo ok\ngit commit --no-verify -m wip"}'
+  assert_blocked
+  run_guard Bash '{"command": "git commit -m \"unclosed"}'
   assert_blocked
 }
 

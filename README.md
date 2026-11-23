@@ -15,7 +15,7 @@ When teams roll out AI coding agents onto real repositories, two failure modes s
 
 | Layer | Mechanism | What it blocks |
 |---|---|---|
-| **1. Agent runtime** | `PreToolUse` hook ([`hooks/guard.sh`](hooks/guard.sh)) | `Read`/`Edit`/`Write`/`MultiEdit`/`NotebookEdit`/`Grep`/`Glob` and `Bash` access to `.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, SSH keys, `~/.aws/credentials`, `~/.config/gcloud/*`, `.npmrc`, `.pypirc`, `credentials.json`, `*service-account*.json`. Also blocks `git commit/push --no-verify`, `git commit -n`, `git -c core.hooksPath=...`, and `git push --force`/`-f`/`+refspec`. |
+| **1. Agent runtime** | `PreToolUse` hook ([`hooks/guard.py`](hooks/guard.py)) | `Read`/`Edit`/`Write`/`MultiEdit`/`NotebookEdit`/`Grep`/`Glob` and `Bash` access to `.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, SSH keys, `~/.aws/credentials`, `~/.config/gcloud/*`, `.npmrc`, `.pypirc`, `credentials.json`, `*service-account*.json`. Also blocks `git commit/push --no-verify`, `git commit -n`, `git -c core.hooksPath=...`, and `git push --force`/`-f`/`+refspec`. |
 | **2. Local git** | `pre-commit` + `gitleaks` + `detect-private-key` ([`install-guardrails`](skills/install-guardrails/SKILL.md)) | Commits containing secrets or private keys before they enter local git history. |
 | **3. Server / CI** | GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) + audit script ([`scripts/check-github-guardrails.sh`](scripts/check-github-guardrails.sh)) | Unscanned PRs, disabled GitHub Secret Scanning / Push Protection, and unprotected `main` branches. |
 
@@ -68,15 +68,15 @@ Example of a blocked tool call:
 
 ```bash
 printf '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/repo/.env"}}' \
-  | ./hooks/guard.sh
+  | ./hooks/guard.py
 # stderr: agent-secret-guard: blocked: Read on secret file '/repo/.env'. Ask the user to handle secrets outside the agent.
 # exit code: 2
 ```
 
 ## Known Limitations
 
-- **Shell parsing is heuristic, not a full bash parser.** Obfuscated commands (e.g., `eval`, base64-encoded paths, dynamic variable indirection like `f=.env; cat "$f"`) can evade `hooks/guard.sh`. That is why Layer 1 is paired with `pre-commit` (Layer 2) and GitHub Push Protection (Layer 3), and why production secrets should never sit in developer worktrees in the first place.
-- **`hooks/guard.sh` requires `jq` and `bash` (3.2+).** Malformed JSON payloads fail closed (exit 2).
+- **Shell parsing is heuristic, not a full bash parser.** Obfuscated commands (e.g., `eval`, base64-encoded paths, dynamic variable indirection like `f=.env; cat "$f"`) can evade `hooks/guard.py`. That is why Layer 1 is paired with `pre-commit` (Layer 2) and GitHub Push Protection (Layer 3), and why production secrets should never sit in developer worktrees in the first place.
+- **`hooks/guard.py` requires `python3` (stdlib only, no third-party packages).** Malformed JSON payloads and unclosed shell quotes fail closed (exit 2). `scripts/check-github-guardrails.sh` additionally uses `gh` and `jq`.
 - **Pre-commit hooks only run when installed** (`pre-commit install`). CI (`gitleaks-action`) and GitHub Push Protection enforce the boundary server-side.
 
 ## License
