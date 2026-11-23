@@ -93,7 +93,8 @@ printf '{"hookEventName":"PreToolUse","toolCall":{"name":"read_file","args":{"Pa
 ## Known Limitations
 
 - **Shell parsing is heuristic, not a full bash parser.** Obfuscated commands (e.g., `eval`, base64-encoded paths, dynamic variable indirection like `f=.env; cat "$f"`) can evade `hooks/guard.py`. That is why Layer 1 is paired with `pre-commit` (Layer 2) and GitHub Push Protection (Layer 3), and why production secrets should never sit in developer worktrees in the first place.
-- **`hooks/guard.py` requires `python3` (stdlib only, no third-party packages).** Malformed JSON payloads and unclosed shell quotes fail closed (exit 2). `scripts/check-github-guardrails.sh` additionally uses `gh` and `jq`.
+- **`hooks/guard.py` requires `python3` (stdlib only, no third-party packages).** Malformed JSON payloads and unclosed shell quotes fail closed (exit 2, or JSON `deny` in Antigravity mode). `scripts/check-github-guardrails.sh` additionally uses `gh` and `jq`.
+- **Antigravity `PreToolUse` decision semantics:** Antigravity requires a `"decision"` field (`allow`, `deny`, `ask`, or `force_ask`). When no secret or git bypass is detected, `hooks/guard.py` returns `{"decision": "allow"}`; adjust that to `"ask"` if you want Antigravity to still prompt interactively on `run_command`. Note also that `agy plugin validate .` emits one non-fatal warning on `hooks/hooks.json` because that file is only for Claude Code (while Antigravity loads root `hooks.json`).
 - **Pre-commit hooks only run when installed** (`pre-commit install`). CI (`gitleaks-action`) and GitHub Push Protection enforce the boundary server-side.
 
 ## License

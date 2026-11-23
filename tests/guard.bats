@@ -150,6 +150,12 @@ assert_allowed() {
   assert_blocked
   run_guard Glob '{"pattern": "*.env"}'
   assert_blocked
+  run_guard Glob '{"pattern": "*.env*"}'
+  assert_blocked
+  run_guard Glob '{"pattern": "{.env,foo}"}'
+  assert_blocked
+  run_guard Glob '{"pattern": "*.{pem,key}"}'
+  assert_blocked
   run_guard Glob '{"pattern": "**/.aws/*"}'
   assert_blocked
 }
@@ -361,12 +367,26 @@ assert_agy_allowed() {
   [ "$(printf '%s' "$output" | jq -r '.decision')" = "allow" ] || { echo "expected allow, got: $output"; return 1; }
 }
 
-@test "AGY: read_file and write_file on secret files are denied" {
+@test "AGY: read_file, view_file, replace_file_content, view_code_item, and notebook tools deny secret paths" {
   run_agy_guard read_file '{"Path": "/repo/.env"}'
   assert_agy_denied
   run_agy_guard write_file '{"Path": "/repo/tls/server.key", "Content": "x"}'
   assert_agy_denied
   run_agy_guard edit_file '{"Path": "/home/u/.aws/./credentials"}'
+  assert_agy_denied
+  run_agy_guard view_file '{"AbsolutePath": "/repo/.env"}'
+  assert_agy_denied
+  run_agy_guard replace_file_content '{"target_file": "/repo/.env"}'
+  assert_agy_denied
+  run_agy_guard multi_replace_file_content '{"target_file": "/repo/.env"}'
+  assert_agy_denied
+  run_agy_guard view_file_outline '{"AbsolutePath": "/repo/.env"}'
+  assert_agy_denied
+  run_agy_guard view_code_item '{"File": "/repo/.env"}'
+  assert_agy_denied
+  run_agy_guard read_notebook '{"NotebookPath": "/repo/.env"}'
+  assert_agy_denied
+  run_agy_guard list_directory '{"DirectoryPath": "/home/u/.ssh"}'
   assert_agy_denied
 }
 
@@ -377,23 +397,33 @@ assert_agy_allowed() {
   assert_agy_allowed
 }
 
-@test "AGY: find_by_name and grep_search enforce secret globs without flagging search Query" {
+@test "AGY: find_by_name and grep_search enforce *.env* and brace globs without flagging search Query" {
   run_agy_guard find_by_name '{"SearchDirectory": "/repo", "Pattern": "**/.env*"}'
   assert_agy_denied
-  run_agy_guard grep_search '{"SearchPath": "/repo", "Includes": ["*.env"], "Query": "SECRET"}'
+  run_agy_guard find_by_name '{"SearchDirectory": "/repo", "Pattern": "*.env*"}'
+  assert_agy_denied
+  run_agy_guard find_by_name '{"SearchDirectory": "/repo", "Pattern": "*.{pem,key}"}'
+  assert_agy_denied
+  run_agy_guard grep_search '{"SearchPath": "/repo", "Includes": ["*.env*"], "Query": "KEY"}'
+  assert_agy_denied
+  run_agy_guard grep_search '{"SearchPath": "/repo", "Includes": ["{.env,foo}"], "Query": "KEY"}'
   assert_agy_denied
   run_agy_guard grep_search '{"SearchPath": "/repo/src", "Query": ".env"}'
   assert_agy_allowed
 }
 
-@test "AGY: run_command blocks secret reads and git guardrail bypasses" {
+@test "AGY: run_command blocks secret reads, secret Cwd, *.env* globs, and git guardrail bypasses" {
   run_agy_guard run_command '{"CommandLine": "cat .env"}'
+  assert_agy_denied
+  run_agy_guard run_command '{"CommandLine": "ls *.env*"}'
+  assert_agy_denied
+  run_agy_guard run_command '{"CommandLine": "cat config", "Cwd": "/home/u/.ssh"}'
   assert_agy_denied
   run_agy_guard run_command '{"CommandLine": "git commit --no-veri -m wip"}'
   assert_agy_denied
   run_agy_guard run_command '{"CommandLine": "git push --force origin main"}'
   assert_agy_denied
-  run_agy_guard run_command '{"CommandLine": "pytest tests/ -q && git status"}'
+  run_agy_guard run_command '{"CommandLine": "pytest tests/ -q && git status", "Cwd": "/repo"}'
   assert_agy_allowed
 }
 

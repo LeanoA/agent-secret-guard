@@ -2,7 +2,7 @@
   "agent-secret-guard": {
     "PreToolUse": [
       {
-        "matcher": "run_command|read_file|write_file|edit_file|list_dir|grep_search|find_by_name|view_file|write_to_file|replace_file_content|multi_replace_file_content|view_file_outline|view_code_item",
+        "matcher": "run_command|read_file|write_file|edit_file|list_dir|list_directory|grep_search|find_by_name|search_in_file|view_file|view_content_chunk|write_to_file|replace_file_content|multi_replace_file_content|view_file_outline|view_code_item|read_notebook|edit_notebook|execute_notebook",
         "hooks": [
           {
             "type": "command",

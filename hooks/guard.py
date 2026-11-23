@@ -31,31 +31,38 @@ AGY_FILE_TOOLS = frozenset(
         "write_file",
         "edit_file",
         "list_dir",
+        "list_directory",
         "grep_search",
         "find_by_name",
+        "search_in_file",
         "view_file",
+        "view_content_chunk",
         "write_to_file",
         "replace_file_content",
         "multi_replace_file_content",
         "view_file_outline",
         "view_code_item",
+        "read_notebook",
+        "edit_notebook",
+        "execute_notebook",
     }
 )
-AGY_PATH_KEYS = (
-    "Path",
-    "path",
-    "TargetFile",
-    "targetFile",
-    "SearchPath",
-    "searchPath",
-    "SearchDirectory",
-    "searchDirectory",
-    "DirectoryPath",
-    "directoryPath",
-    "FilePath",
-    "filePath",
-    "Includes",
-    "includes",
+# Normalized (lowercased, underscores removed) arg keys holding paths or globs.
+AGY_NORM_PATH_KEYS = frozenset(
+    {
+        "path",
+        "absolutepath",
+        "targetfile",
+        "searchpath",
+        "searchdirectory",
+        "directorypath",
+        "filepath",
+        "file",
+        "notebookpath",
+        "includes",
+        "glob",
+        "cwd",
+    }
 )
 SAFE_BASENAMES = frozenset({".env.example", ".env.sample", ".env.template"})
 SAFE_SUFFIXES = (".env.example", ".env.sample", ".env.template", ".pub")
@@ -92,6 +99,7 @@ GIT_SUB_VALUE_OPTS = frozenset(
 )
 SEGMENT_SEPARATORS = frozenset({";", "|", "||", "&", "&&", "\n", "(", ")", "`"})
 SECRET_SPLIT_RE = re.compile(r'[;|&\n<>()"\'`=\s{},]+')
+BRACE_RE = re.compile(r"\{([^{}]+)\}")
 GIT_CONFIG_KEY_RE = re.compile(r"^GIT_CONFIG_KEY_\d+=(.+)$")
 
 
@@ -102,6 +110,27 @@ class GuardBlocked(Exception):
 def block(reason: str) -> NoReturn:
     """Signal a guardrail block with a human-readable reason."""
     raise GuardBlocked(reason)
+
+
+def expand_braces(text: str, limit: int = 64) -> list[str]:
+    """Expand glob/shell brace expressions like '*.{pem,key}' for secret checks."""
+    results = [text]
+    while len(results) < limit:
+        expanded: list[str] = []
+        changed = False
+        for item in results:
+            m = BRACE_RE.search(item)
+            if m and "," in m.group(1):
+                changed = True
+                prefix, suffix = item[: m.start()], item[m.end() :]
+                for alt in m.group(1).split(","):
+                    expanded.append(f"{prefix}{alt}{suffix}")
+            else:
+                expanded.append(item)
+        results = expanded
+        if not changed:
+            break
+    return results[:limit]
 
 
 def is_secret_path(raw: str) -> bool:
@@ -121,7 +150,7 @@ def is_secret_path(raw: str) -> bool:
 
     if base == ".env" or base.startswith(".env.") or base.endswith(".env") or ".env." in base:
         return True
-    if base.startswith(".env") and any(ch in base for ch in "*?["):
+    if ".env" in base and any(ch in base for ch in "*?["):
         return True
     if base.startswith(SSH_KEY_PREFIXES) or base.endswith(SECRET_EXTENSIONS):
         return True
@@ -133,13 +162,17 @@ def is_secret_path(raw: str) -> bool:
 
 
 def check_token_secrets(tok: str) -> None:
-    """Check one shell token (splitting braces/assignments) for secret paths."""
-    for part in SECRET_SPLIT_RE.split(tok):
-        if part and is_secret_path(part):
-            block(
-                f"command references secret file '{part}'. "
-                "Ask the user to handle secrets outside the agent."
-            )
+    """Check one shell token (expanding braces and splitting assignments) for secret paths."""
+    candidates = [tok]
+    if "{" in tok and "}" in tok:
+        candidates = expand_braces(tok)
+    for cand in candidates:
+        for part in SECRET_SPLIT_RE.split(cand):
+            if part and is_secret_path(part):
+                block(
+                    f"command references secret file '{part}'. "
+                    "Ask the user to handle secrets outside the agent."
+                )
 
 
 def strip_line_continuations(command: str) -> str:
@@ -412,14 +445,18 @@ def check_bash_command(command: str, depth: int = 0) -> None:
 
 
 def check_secret_value(tool: str, val: object) -> None:
-    """Validate a string or list-of-strings argument against is_secret_path."""
+    """Validate a string/list path or brace-expanded glob against is_secret_path."""
     items = val if isinstance(val, list) else [val]
     for item in items:
-        if isinstance(item, str) and item and is_secret_path(item):
-            block(
-                f"{tool} on secret file '{item}'. "
-                "Ask the user to handle secrets outside the agent."
-            )
+        if not isinstance(item, str) or not item:
+            continue
+        candidates = expand_braces(item) if ("{" in item and "}" in item) else [item]
+        for cand in candidates:
+            if is_secret_path(cand):
+                block(
+                    f"{tool} on secret file '{item}'. "
+                    "Ask the user to handle secrets outside the agent."
+                )
 
 
 def handle_claude(payload: dict) -> None:
@@ -456,17 +493,17 @@ def handle_antigravity(payload: dict) -> None:
         args = {}
 
     if tool in AGY_FILE_TOOLS:
-        keys = list(AGY_PATH_KEYS)
-        if tool == "find_by_name":
-            keys.extend(["Pattern", "pattern"])
-        for key in keys:
-            check_secret_value(tool, args.get(key))
+        for key, val in args.items():
+            norm = key.lower().replace("_", "")
+            if norm in AGY_NORM_PATH_KEYS or (tool == "find_by_name" and norm == "pattern"):
+                check_secret_value(tool, val)
     elif tool == "run_command":
-        for key in ("CommandLine", "commandLine", "command"):
-            cmd = args.get(key)
-            if isinstance(cmd, str) and cmd:
-                check_bash_command(cmd)
-                break
+        for key, val in args.items():
+            norm = key.lower().replace("_", "")
+            if norm == "cwd":
+                check_secret_value(tool, val)
+            elif norm in {"commandline", "command"} and isinstance(val, str) and val:
+                check_bash_command(val)
 
 
 def main() -> int:
