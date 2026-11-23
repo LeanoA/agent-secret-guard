@@ -21,7 +21,7 @@ Source: user accepted the proposal of 2026-11-22 (see L1-L2). Scope below comes 
 | ID | Specs | Route | Status | Evidence |
 |---|---|---|---|---|
 | T1 | S1 | inline | done | `a9a192a`, `claude plugin validate .` PASS |
-| T2 | S2, S3 | inline (no writer trigger: single unit) | in progress (migrating to Python) | `26df8c8`, `7122644` (replaced by `hooks/guard.py`) |
+| T2 | S2, S3 | inline (no writer trigger: single unit) | done | `2d096a0` + `85c208c`, 49/49 `bats tests/guard.bats` PASS, independent verifier PASS (Risk: item 2 security guard) |
 | T3 | S4 | inline | done | `aec5914`, 5/5 `bats tests/install.bats` PASS, `claude plugin validate .` PASS |
 | T4 | S5 | inline | done | `2fc757a`, 4/4 `bats tests/github_guardrails.bats` PASS |
 | T5 | S6 | inline | done | `e7c7d63`, structural readback |
@@ -38,3 +38,4 @@ Forecast: ~600 authored changed lines; above 400 → ask-on-risk chain question 
 - **L3:** Environment: Claude Code 2.1.207 (`claude plugin validate` available), bats, jq present; gitleaks and pre-commit not installed (use `uvx pre-commit`, which bootstraps gitleaks).
 - **L4 (2026-11-22):** Independent read-only verifier (`c5a044e7`) audited `a9a192a..ad6ae2f`, passed S1/S4/S5/S6/S7 and flagged 4 concrete blockers in `hooks/guard.sh` (secret dirs without trailing slash, attached/mixed-case `-c core.hooksPath`, `--git-dir`/`--work-tree`/`/usr/bin/git`, blind quote stripping) plus `~/.ssh/*.pub` order. Fixed all in `7122644` with 5 regression tests (53/53 `bats` PASS); scoped recheck returned PASS on all items. T7 (publish/rollout) remains blocked awaiting explicit user authorization.
 - **L5 (2026-11-22, verbatim):** "Lo pasemos" — user approved migrating `hooks/guard.sh` to pure-stdlib `hooks/guard.py`.
+- **L6 (2026-11-22):** Independent read-only verifier (`434dd993`) audited `2d096a0` (`hooks/guard.py`) and reported 8 concrete blockers (line continuations `\\\n`, env `/git` prefix, backticks/`bash -c`, `--no-veri` prefix, `GIT_CONFIG_*` overrides, unnormalized `.`/`..` paths, brace expansion/`*.env` globs, and 2 false positives `-oforce` / `-m "... .env ..."`). Fixed all 8 in `85c208c` (58/58 `bats tests` PASS, `claude plugin validate .` PASS); scoped recheck returned PASS on all 8 items. T7 (publish/rollout) remains blocked awaiting explicit user authorization.
